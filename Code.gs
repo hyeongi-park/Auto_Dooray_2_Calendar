@@ -2,7 +2,6 @@
  * Dooray! 메일을 감지하여 Gemini API로 일정을 파싱한 후 Google Calendar에 일괄 등록합니다.
  */
 
-
 function autoSyncDoorayMailToCalendar() {
   // 1. 중복 실행 방지를 위한 Script Lock 설정
   const lock = LockService.getScriptLock();  
@@ -14,7 +13,8 @@ function autoSyncDoorayMailToCalendar() {
   // 2. 실행 시간 및 배치 크기 설정
   const START_TIME = Date.now();
   const MAX_EXECUTION_TIME_MS = 4.5 * 60 * 1000; // 4분 30초 제한
-  const BATCH_SIZE = 3; // 한 번 실행할 때 최대 3개의 스레드 처리
+  const BATCH_SIZE = 3; // 한 번 실행할 때 최대 10개의 스레드 처리
+  const MAX_OUTPUT_TOKENS = 1000; // API 호출별 JSON 텍스트 길이 제한 (속도 향상)
 
   try {
     const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
@@ -27,7 +27,7 @@ function autoSyncDoorayMailToCalendar() {
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
-    const searchQuery = `is:unread from:(${doorayMail})`;
+    const searchQuery = `is:unread to:(${doorayMail})`;
     
     Logger.log(`[INFO] 검색된 쿼리 확인: ${searchQuery}`);
 
@@ -39,26 +39,32 @@ function autoSyncDoorayMailToCalendar() {
     const apiRequests = [];
     const mailContexts = [];
 
-    // 3. 읽지 않은 메일을 순회하며 병렬 호출을 위한 요청 데이터 수집
+    // 3. 읽지 않은 메일을 순회하며 '스레드당 가장 마지막(최신) 안 읽은 메일'만 추출
     for (const thread of threads) {
       // 시간 제한 체크
       if (Date.now() - START_TIME > MAX_EXECUTION_TIME_MS) {
-        Logger.log('[WARNING] 실행 시간 제한(4.5분)에 도달하여 작업을 다음 실행으로 미룹니다.');
+        Logger.log('[WARNING] 실행 시간 제한에 도달하여 작업을 다음 실행으로 미룹니다.');
         break;
       }
 
       const messages = thread.getMessages();
-      for (const msg of messages) {
-        if (!msg.isUnread()) continue;
+      
+      // 스레드 내의 메시지 중 읽지 않은 메일들만 필터링
+      const unreadMessages = messages.filter(msg => msg.isUnread());
+      
+      if (unreadMessages.length === 0) continue;
 
-        const subject = msg.getSubject();
-        const body = msg.getPlainBody();
-        const mailDate = msg.getDate();
-        const todayStr = Utilities.formatDate(mailDate, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+      // 배열의 마지막 원소(가장 최신 메일)를 선택
+      const latestMsg = unreadMessages[unreadMessages.length - 1];
 
-        Logger.log(`[INFO] API 요청 대기열 추가 : ${subject}`);
+      const subject = latestMsg.getSubject();
+      const body = latestMsg.getPlainBody();
+      const mailDate = latestMsg.getDate();
+      const todayStr = Utilities.formatDate(mailDate, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
 
-        const prompt = `
+      Logger.log(`[INFO] API 요청 대기열 추가 (최신 메일) : ${subject}`);
+
+      const prompt = `
 당신은 메일 내용에서 행사, 대회, 세미나, 모임, 제출 마감일 등 일정 정보를 추출하고 핵심 내용을 요약하는 AI 도우미입니다.
 아래 메일 내용을 분석하여 Google Calendar에 등록할 일정 정보와 상세 설명에 들어갈 요약 내용을 추출해 주세요.
 
@@ -87,25 +93,25 @@ ${body.substring(0, 4000)}
 }
 `;
 
-        const payload = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 2000, // JSON 텍스트 길이 제한 (속도 향상)
-            responseMimeType: "application/json"
-          }
-        };
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json"
+        }
+      };
 
-        apiRequests.push({
-          url: url,
-          method: 'post',
-          contentType: 'application/json',
-          payload: JSON.stringify(payload),
-          muteHttpExceptions: true
-        });
+      apiRequests.push({
+        url: url,
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
 
-        mailContexts.push({ thread, msg, subject, body });
-      }
+      // 스레드 전체와 파싱에 사용한 최신 메시지(latestMsg)를 컨텍스트에 저장
+      mailContexts.push({ thread, msg: latestMsg, subject, body });
     }
 
     // 4. 수집된 API 요청을 병렬로 한 번에 처리
@@ -121,7 +127,7 @@ ${body.substring(0, 4000)}
 
         if (responseCode !== 200) {
           Logger.log(`[ERROR] 메일 '${subject}' API 처리 실패 (HTTP ${responseCode}). 다음 실행 시 재시도합니다.`);
-          return; // 실패한 메일은 읽음 처리 하지 않고 다음 트리거로 넘김
+          return;
         }
 
         try {
@@ -134,7 +140,7 @@ ${body.substring(0, 4000)}
               const startTime = new Date(parsedEvent.startDate);
               let endTime = parsedEvent.endDate 
                 ? new Date(parsedEvent.endDate) 
-                : new Date(startTime.getTime() + 60 * 60 * 1000); // 종료 시간 없으면 1시간 추가
+                : new Date(startTime.getTime() + 60 * 60 * 1000);
 
               const descriptionText = parsedEvent.summary 
                 ? `[Dooray 메일 연동]\n\n${parsedEvent.summary}` 
@@ -158,14 +164,13 @@ ${body.substring(0, 4000)}
             }
           }
 
-          // 파싱 및 등록을 성공적으로 마친 경우에만 메일을 읽음 & 휴지통 처리
-          msg.markRead();
+          // 파싱 및 처리가 성공적으로 마친 경우 스레드 내 모든 메일을 읽음 처리 후 휴지통 이동
+          thread.markRead();
           thread.moveToTrash();
-          Logger.log(`[INFO] 메일 처리 완료 및 휴지통 이동 완료 : ${subject}`);
+          Logger.log(`[INFO] 스레드 전체 읽음 및 휴지통 이동 완료 : ${subject}`);
 
         } catch (e) {
           Logger.log(`[ERROR] 메일 '${subject}' 파싱 또는 캘린더 등록 실패 : ${e.message}`);
-          // JSON 파싱 에러 등의 경우 읽음 처리 없이 스킵하여 다음번 안전하게 재시도되게 둡니다.
         }
       });
     }
