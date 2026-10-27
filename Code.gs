@@ -22,7 +22,7 @@ function autoSyncDoorayMailToCalendar() {
   let nonEventCount = 0;
   let errorCount = 0;
   const createdEventsSummary = [];
-  const errorDetailsSummary =[];
+  const errorDetailsSummary = [];
 
   try {
     const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
@@ -138,8 +138,17 @@ ${body.substring(0, 4000)}
 
         if (responseCode !== 200) {
           errorCount++;
-          const errorMsg = `메일 '${subject}' API 처리 실패 (HTTP ${responseCode}).`
-          Logger.log(`[ERROR] '${errorMsg}' 다음 실행 시 재시도합니다.`);
+          try {
+            const errorJson = JSON.parse(responseText);
+            if (errorJson.error && errorJson.error.message) {
+              detailedErrorMessage = errorJson.error.message;
+            }
+          } catch (e) {
+            // responseText가 JSON 형식이 아니면 텍스트 원문 사용
+          }
+
+          const errorMsg = `메일 '${subject}' API 처리 실패 (HTTP ${responseCode}: ${detailedErrorMessage}).`;
+          Logger.log(`[ERROR] ${errorMsg} 다음 실행 시 재시도합니다.`);
           errorDetailsSummary.push(` - ${errorMsg}`);
           return;
         }
@@ -190,8 +199,8 @@ ${body.substring(0, 4000)}
 
         } catch (e) {
           errorCount++;
-          const errorMsg = `메일 '${subject}' 파싱 또는 캘린더 등록 실패 : ${e.message}.`
-          Logger.log(`[ERROR] '${errorMsg}' 다음 실행 시 재시도합니다.`);
+          const errorMsg = `메일 '${subject}' 파싱 또는 캘린더 등록 실패 : ${e.message}.`;
+          Logger.log(`[ERROR] ${errorMsg} 다음 실행 시 재시도합니다.`);
           errorDetailsSummary.push(` - ${errorMsg}`);
         }
       });
@@ -214,7 +223,7 @@ ${body.substring(0, 4000)}
     }
     summaryLog += `==================================================`;
 
-    if (errorDetailsSummary.length >0) {
+    if (errorDetailsSummary.length > 0) {
       summaryLog += `\n[오류 발생 원인 목록]\n`;
       summaryLog += errorDetailsSummary.join('\n') + `\n`;
     }
