@@ -88,15 +88,15 @@ API 키를 발급 완료했습니다. 다시 Google Apps Script로 돌아온 뒤
 
 ![Script Property 설정 2](etc/Photos/17.png)
 
-"Property" 항목에는 GEMINI_API_KEY를 "Value" 항목에는 아까 복사했던 여러분의 키를 입력하세요. Value 항목에는 아래 사진에서 나온 키 값(AQ.AaBbCcDdEeFfGgHhIiJjKkLlMmNn_OoPpQqRrSsTtUu)이 아닌, **실제 여러분이 발급한 API key를 입력해야 합니다.** 입력을 완료했으면 "Save Script Properties"를 누르세요. 
+"Property" 항목에는 `GEMINI_API_KEY`를 "Value" 항목에는 아까 복사했던 여러분의 키를 입력하세요. Value 항목에는 아래 사진에서 나온 키 값(AQ.AaBbCcDdEeFfGgHhIiJjKkLlMmNn_OoPpQqRrSsTtUu)이 아닌, **실제 여러분이 발급한 API key를 입력해야 합니다.** 입력을 완료했으면 "Save Script Properties"를 누르세요. 
 
 ![Script Property 설정 3](etc/Photos/18.png)
 
-이메일 주소와 저장할 Calendar ID도 여기서 등록해야 합니다. 먼저 이메일 주소를 입력하기 위해 "Add Script property"를 눌러서 Property에는 "DOORAY_MAIL"을 입력하고 Value에는 여러분이 받아서 처리하고 싶은 Dooray! 메일 주소를 입력하세요. 아래 예시의 경우 @kaist.ac.kr로부터 보내지는 모든 메일 주소를 기준으로 하였습니다. **Gmail 주소가 아니라 Dooray! 메일 주소를 입력해야 합니다.**
+이메일 주소와 저장할 Calendar ID도 여기서 등록해야 합니다. 먼저 이메일 주소를 입력하기 위해 "Add Script property"를 눌러서 Property에는 `DOORAY_MAIL`을 입력하고 Value에는 여러분이 받아서 처리하고 싶은 Dooray! 메일 주소를 입력하세요. 아래 예시의 경우 @kaist.ac.kr로부터 보내지는 모든 메일 주소를 기준으로 하였습니다. **Gmail 주소가 아니라 Dooray! 메일 주소를 입력해야 합니다.**
 
 ![Script Property 설정 4](etc/Photos/19.png)
 
-Calendar ID의 경우에는 Google Calendar의 Settings 항목에서 여러분이 이름지었던 항목을 누르고 아래로 가면 Integrate calendar 항목에 Calendar ID가 길게 적혀 있습니다. 이 값을 Value로 하고, Property는 "CALENDAR_ID"로 해서 Script Property를 더 추가하세요. Value의 경우 아래 사진에 나온 아이디 값(abcdef1234567890abcdef1234567890@group.calendar.google.com)이 아닌 **실제 여러분의 Google Calendar에 있는 Calendar ID를 입력해야 합니다.**
+Calendar ID의 경우에는 Google Calendar의 Settings 항목에서 여러분이 이름지었던 항목을 누르고 아래로 가면 Integrate calendar 항목에 Calendar ID가 길게 적혀 있습니다. 이 값을 Value로 하고, Property는 `CALENDAR_ID`로 해서 Script Property를 더 추가하세요. Value의 경우 아래 사진에 나온 아이디 값(abcdef1234567890abcdef1234567890@group.calendar.google.com)이 아닌 **실제 여러분의 Google Calendar에 있는 Calendar ID를 입력해야 합니다.**
 
 ![Script Property 설정 5](etc/Photos/20.png)
 
