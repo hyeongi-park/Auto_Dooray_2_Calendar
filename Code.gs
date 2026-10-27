@@ -12,9 +12,17 @@ function autoSyncDoorayMailToCalendar() {
 
   // 2. 실행 시간 및 배치 크기 설정
   const START_TIME = Date.now();
-  const MAX_EXECUTION_TIME_MS = 4.5 * 60 * 1000; // 4분 30초 제한
-  const BATCH_SIZE = 3; // 한 번 실행할 때 최대 10개의 스레드 처리
-  const MAX_OUTPUT_TOKENS = 1000; // API 호출별 JSON 텍스트 길이 제한 (속도 향상)
+  const MAX_EXECUTION_TIME_MS = 4.5 * 60 * 1000; // 시간 제한
+  const BATCH_SIZE = 3; // 한 번 실행할 때 최대 스레드 처리 개수 제한
+  const MAX_OUTPUT_TOKENS = 1000; // API 호출별 JSON 텍스트 길이 제한
+
+  let processedThreadsCount = 0;
+  let totalUnreadMessagesCount = 0;
+  let registeredEventsCount = 0;
+  let nonEventCount = 0;
+  let errorCount = 0;
+  const createdEventsSummary = [];
+  const errorDetailsSummary =[];
 
   try {
     const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
@@ -43,7 +51,7 @@ function autoSyncDoorayMailToCalendar() {
     for (const thread of threads) {
       // 시간 제한 체크
       if (Date.now() - START_TIME > MAX_EXECUTION_TIME_MS) {
-        Logger.log('[WARNING] 실행 시간 제한에 도달하여 작업을 다음 실행으로 미룹니다.');
+        Logger.log('[WARNING] 실행 시간 제한(4.5분)에 도달하여 작업을 다음 실행으로 미룹니다.');
         break;
       }
 
@@ -53,6 +61,9 @@ function autoSyncDoorayMailToCalendar() {
       const unreadMessages = messages.filter(msg => msg.isUnread());
       
       if (unreadMessages.length === 0) continue;
+
+      processedThreadsCount++;
+      totalUnreadMessagesCount += unreadMessages.length;
 
       // 배열의 마지막 원소(가장 최신 메일)를 선택
       const latestMsg = unreadMessages[unreadMessages.length - 1];
@@ -126,7 +137,10 @@ ${body.substring(0, 4000)}
         const responseText = response.getContentText();
 
         if (responseCode !== 200) {
-          Logger.log(`[ERROR] 메일 '${subject}' API 처리 실패 (HTTP ${responseCode}). 다음 실행 시 재시도합니다.`);
+          errorCount++;
+          const errorMsg = `메일 '${subject}' API 처리 실패 (HTTP ${responseCode}).`
+          Logger.log(`[ERROR] '${errorMsg}' 다음 실행 시 재시도합니다.`);
+          errorDetailsSummary.push(` - ${errorMsg}`);
           return;
         }
 
@@ -146,21 +160,26 @@ ${body.substring(0, 4000)}
                 ? `[Dooray 메일 연동]\n\n${parsedEvent.summary}` 
                 : `[Dooray 메일 연동]\n\n${body}`;
 
+              const titleText = parsedEvent.title || subject;
+
               if (parsedEvent.isAllDay) {
-                calendar.createAllDayEvent(parsedEvent.title || subject, startTime, {
+                calendar.createAllDayEvent(titleText, startTime, {
                   description: descriptionText,
                   location: parsedEvent.location || ''
                 });
               } else {
-                calendar.createEvent(parsedEvent.title || subject, startTime, endTime, {
+                calendar.createEvent(titleText, startTime, endTime, {
                   description: descriptionText,
                   location: parsedEvent.location || ''
                 });
               }
 
-              Logger.log(`[SUCCESS] 일정 등록 완료 : ${parsedEvent.title} (${parsedEvent.startDate})`);
+              Logger.log(`[SUCCESS] 일정 등록 완료 : ${titleText} (${parsedEvent.startDate})`);
+              registeredEventsCount++;
+              createdEventsSummary.push(`  - "${titleText}" (${parsedEvent.startDate})`);
             } else {
               Logger.log(`[INFO] 일정 정보가 없거나 행사 메일이 아님 : ${subject}`);
+              nonEventCount++;
             }
           }
 
@@ -170,10 +189,37 @@ ${body.substring(0, 4000)}
           Logger.log(`[INFO] 스레드 전체 읽음 및 휴지통 이동 완료 : ${subject}`);
 
         } catch (e) {
-          Logger.log(`[ERROR] 메일 '${subject}' 파싱 또는 캘린더 등록 실패 : ${e.message}`);
+          errorCount++;
+          const errorMsg = `메일 '${subject}' 파싱 또는 캘린더 등록 실패 : ${e.message}.`
+          Logger.log(`[ERROR] '${errorMsg}' 다음 실행 시 재시도합니다.`);
+          errorDetailsSummary.push(` - ${errorMsg}`);
         }
       });
     }
+
+    let summaryLog = `\n==================================================\n`;
+    summaryLog += `[INFO] Dooray 메일 캘린더 동기화 실행 결과 요약\n`;
+    summaryLog += `==================================================\n`;
+    summaryLog += `- 총 처리 스레드 수: ${processedThreadsCount}개\n`;
+    summaryLog += `- 총 검토 메일 수: ${totalUnreadMessagesCount}개\n`;
+    summaryLog += `- 캘린더 일정 등록 완료: ${registeredEventsCount}건\n`;
+    summaryLog += `- 일정 미포함 (일반 메일): ${nonEventCount}건\n`;
+    if (errorCount > 0) {
+      summaryLog += `- 오류 발생 건수: ${errorCount}건\n`;
+    }
+    
+    if (createdEventsSummary.length > 0) {
+      summaryLog += `\n[등록된 일정 세부 목록]\n`;
+      summaryLog += createdEventsSummary.join('\n') + `\n`;
+    }
+    summaryLog += `==================================================`;
+
+    if (errorDetailsSummary.length >0) {
+      summaryLog += `\n[오류 발생 원인 목록]\n`;
+      summaryLog += errorDetailsSummary.join('\n') + `\n`;
+    }
+
+    Logger.log(summaryLog);
 
   } finally {
     // 스크립트 종료 시 반드시 락 해제

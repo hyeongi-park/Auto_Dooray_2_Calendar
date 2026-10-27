@@ -190,9 +190,11 @@ RPD 초과로 인한 에러는 보통 해결이 어렵습니다. 하루에 같�
 ## Gemini API 처리 실패로 HTTP 503이 뜹니다
 이 오류는 Gemini Server가 다른 요청들로 인해 바빠서 현재 작업을 못 한다는 뜻입니다. 현재 코드에서는 이 에러가 나올 시 여러 번 재시도를 통해 최대한 오류율을 줄이려고 하고 있지만 만약 이 오류가 너무 거슬린다면 Google 유료 플랜을 구독해서 우선순위를 앞당기거나, 다른 무료 API를 사용하는 방법이 있을 수 있습니다.
 
+낮은 확률로 이 오류가 Server가 다른 사용자들의 요청으로 바빠서 요청을 처리 못하는 경우가 아닌, 복잡한 연산을 수행할 때 Server 응답 시간이 초과 및 부하로 인해 문제가 생기는 경우일 수 있으나, 현재 설정된 모델인 gemini-3.8-flash의 경우 Pro 모델처럼 많은 연산을 사용하지 않기 때문에 이러한 일이 일어나는 경우가 매우 적습니다. 다만, 커스터마이징을 통해 모델을 수정했을 때 이러한 오류가 발생 시 이를 검토해보는 걸 추천해드립니다.
+
 
 ## Gemini API 처리 실패로 HTTP 404가 뜹니다
-이 오류는 Gemini 모델을 현재 지원해주고 있지 않은 모델(ex. gemini-1.5-flash 등)을 사용할 때 발생합니다. 현재 정책상 무료로 사용할 수 있는 Gemini API는 Antigravity와 gemini-3.8-flash가 있으며 여기서는 gemini-3.8-flash를 사용하는 것을 권장합니다. `url` 부분의 링크에 model이 gemini-3.8-flash로 설정되어있는지 확인해주세요.
+이 오류는 Gemini 모델을 현재 지원해주고 있지 않은 모델(ex. gemini-1.5-flash 등)을 사용할 때 발생합니다. 현재 정책상 무료로 사용할 수 있는 Gemini API는 Antigravity와 gemini-3.8-flash가 있으며 여기서는 gemini-3.8-flash를 사용하는 것을 권장합니다. `url` 부분의 링크에 model이 gemini-3.8-flash로 설정되어 있는지 확인해주세요.
 
 
 ## Google Apps Script에서 Exceeded maximum execution time 로그가 뜹니다
